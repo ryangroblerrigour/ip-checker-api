@@ -2,6 +2,7 @@ from fastapi import FastAPI
 import requests
 
 app = FastAPI()
+API_KEY = "rigour-ip-checking-service"
 
 @app.get("/")
 def read_root():
