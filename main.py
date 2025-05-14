@@ -28,6 +28,9 @@ async def get_api_key(api_key: str = Security(api_key_header)):
 def log_to_google_sheets(project_id, respondent_id, ip_address, country, country_code, region, region_name, city):
     scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
 
+    # Log all environment variables (for debugging)
+    logging.debug(f"All environment variables: {os.environ}")
+
     # Read credentials from the environment variable
     creds_json = os.getenv('GOOGLE_SHEET_CREDENTIALS')
 
@@ -35,6 +38,8 @@ def log_to_google_sheets(project_id, respondent_id, ip_address, country, country
     if creds_json is None:
         logging.error("Google Sheets credentials not found in environment variable.")
         raise HTTPException(status_code=500, detail="Google Sheets credentials not found in environment variable")
+
+    logging.debug(f"Google Sheets credentials found: {creds_json[:30]}...")  # Log part of the credentials for debugging
 
     try:
         creds_dict = json.loads(creds_json)  # Parse the JSON string to a dictionary
@@ -66,47 +71,3 @@ def log_to_google_sheets(project_id, respondent_id, ip_address, country, country
     except Exception as e:
         logging.error(f"Error appending data to Google Sheets: {str(e)}")
         raise HTTPException(status_code=500, detail="Error appending data to Google Sheets")
-
-# 🧑‍💻 Root endpoint to check API health
-@app.get("/")
-def read_root():
-    return {"message": "IP Checker API is working!"}
-
-# 🌍 IP check and log endpoint
-@app.post("/ip-check")
-async def ip_check(payload: dict, api_key: str = Security(get_api_key)):
-    project_id = payload.get("project_id")
-    respondent_id = payload.get("respondent_id")
-    ip_address = payload.get("ip_address")
-
-    geo_response = requests.get(f"http://ip-api.com/json/{ip_address}")
-    geo_data = geo_response.json()
-
-    country = geo_data.get("country", "Unknown")
-    country_code = geo_data.get("countryCode", "Unknown")
-    region = geo_data.get("region", "Unknown")
-    region_name = geo_data.get("regionName", "Unknown")
-    city = geo_data.get("city", "Unknown")
-
-    # Log to Google Sheets
-    log_to_google_sheets(
-        project_id,
-        respondent_id,
-        ip_address,
-        country,
-        country_code,
-        region,
-        region_name,
-        city
-    )
-
-    return {
-        "project_id": project_id,
-        "respondent_id": respondent_id,
-        "ip_address": ip_address,
-        "country": country,
-        "countryCode": country_code,
-        "region": region,
-        "regionName": region_name,
-        "city": city
-    }
