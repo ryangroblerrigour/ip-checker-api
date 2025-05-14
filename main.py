@@ -1,24 +1,50 @@
 from fastapi import FastAPI, HTTPException, Security
 from fastapi.security.api_key import APIKeyHeader
 import requests
+import gspread
+from oauth2client.service_account import ServiceAccountCredentials
+from datetime import datetime
 
 app = FastAPI()
 
-# API key config
+# 🔐 API key setup
 API_KEY = "rigour-ip-checking-service"
 API_KEY_NAME = "x-api-key"
 api_key_header = APIKeyHeader(name=API_KEY_NAME, auto_error=False)
 
-# Dependency for API key checking
+# 🔐 API key validation
 async def get_api_key(api_key: str = Security(api_key_header)):
     if api_key == API_KEY:
         return api_key
     raise HTTPException(status_code=403, detail="Invalid or missing API Key")
 
+# 📝 Google Sheets logging function
+def log_to_google_sheets(project_id, respondent_id, ip_address, country, country_code, region, region_name, city):
+    scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
+    creds = ServiceAccountCredentials.from_json_keyfile_name("rigour-sheets-key.json", scope)
+    client = gspread.authorize(creds)
+
+    sheet = client.open("Rigour IP address checking").sheet1
+    timestamp = datetime.utcnow().isoformat()
+
+    sheet.append_row([
+        project_id,
+        respondent_id,
+        ip_address,
+        country,
+        country_code,
+        region,
+        region_name,
+        city,
+        timestamp
+    ])
+
+# 🔍 Simple root health check
 @app.get("/")
 def read_root():
     return {"message": "IP Checker API is working!"}
 
+# 🌍 IP check and log endpoint
 @app.post("/ip-check")
 async def ip_check(payload: dict, api_key: str = Security(get_api_key)):
     project_id = payload.get("project_id")
@@ -33,6 +59,18 @@ async def ip_check(payload: dict, api_key: str = Security(get_api_key)):
     region = geo_data.get("region", "Unknown")
     region_name = geo_data.get("regionName", "Unknown")
     city = geo_data.get("city", "Unknown")
+
+    # Log to Google Sheets
+    log_to_google_sheets(
+        project_id,
+        respondent_id,
+        ip_address,
+        country,
+        country_code,
+        region,
+        region_name,
+        city
+    )
 
     return {
         "project_id": project_id,
