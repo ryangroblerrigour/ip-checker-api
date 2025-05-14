@@ -4,6 +4,7 @@ import requests
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 from datetime import datetime
+import os
 
 app = FastAPI()
 
@@ -21,7 +22,11 @@ async def get_api_key(api_key: str = Security(api_key_header)):
 # 📝 Google Sheets logging function
 def log_to_google_sheets(project_id, respondent_id, ip_address, country, country_code, region, region_name, city):
     scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-    creds = ServiceAccountCredentials.from_json_keyfile_name("rigour-sheets-key.json", scope)
+    
+    # Read credentials from the environment variable
+    creds_json = os.getenv('GOOGLE_SHEET_CREDENTIALS')
+
+    creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_json, scope)
     client = gspread.authorize(creds)
 
     sheet = client.open("Rigour IP address checking").sheet1
