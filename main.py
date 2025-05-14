@@ -1,59 +1,73 @@
+import os
+import json
+import logging
 from fastapi import FastAPI, HTTPException, Security
 from fastapi.security.api_key import APIKeyHeader
 import requests
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 from datetime import datetime
-import os
-import json
+
+# Set up logging
+logging.basicConfig(level=logging.DEBUG)
 
 app = FastAPI()
 
-# 🔐 API key setup
+# API key setup
 API_KEY = "rigour-ip-checking-service"
 API_KEY_NAME = "x-api-key"
 api_key_header = APIKeyHeader(name=API_KEY_NAME, auto_error=False)
 
-# 🔐 API key validation
+# API key validation
 async def get_api_key(api_key: str = Security(api_key_header)):
     if api_key == API_KEY:
         return api_key
     raise HTTPException(status_code=403, detail="Invalid or missing API Key")
 
-# 📝 Google Sheets logging function
+# Google Sheets logging function
 def log_to_google_sheets(project_id, respondent_id, ip_address, country, country_code, region, region_name, city):
     scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
 
     # Read credentials from the environment variable
     creds_json = os.getenv('GOOGLE_SHEET_CREDENTIALS')
 
-    # If the creds are not found, raise an error
-    if not creds_json:
+    # Log the environment variable to verify if it's being read correctly
+    if creds_json is None:
+        logging.error("Google Sheets credentials not found in environment variable.")
         raise HTTPException(status_code=500, detail="Google Sheets credentials not found in environment variable")
 
-    # Convert the credentials string to a dictionary
-    creds_dict = json.loads(creds_json)
+    try:
+        creds_dict = json.loads(creds_json)  # Parse the JSON string to a dictionary
+    except json.JSONDecodeError as e:
+        logging.error(f"Failed to parse Google Sheets credentials: {str(e)}")
+        raise HTTPException(status_code=500, detail="Error parsing Google Sheets credentials")
 
-    # Use the credentials to authenticate
-    creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
-    client = gspread.authorize(creds)
+    try:
+        creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
+        client = gspread.authorize(creds)
+    except Exception as e:
+        logging.error(f"Error authenticating with Google Sheets: {str(e)}")
+        raise HTTPException(status_code=500, detail="Error authenticating with Google Sheets")
 
-    sheet = client.open("Rigour IP address checking").sheet1
-    timestamp = datetime.utcnow().isoformat()
+    try:
+        sheet = client.open("Rigour IP address checking").sheet1
+        timestamp = datetime.utcnow().isoformat()
+        sheet.append_row([
+            project_id,
+            respondent_id,
+            ip_address,
+            country,
+            country_code,
+            region,
+            region_name,
+            city,
+            timestamp
+        ])
+    except Exception as e:
+        logging.error(f"Error appending data to Google Sheets: {str(e)}")
+        raise HTTPException(status_code=500, detail="Error appending data to Google Sheets")
 
-    sheet.append_row([
-        project_id,
-        respondent_id,
-        ip_address,
-        country,
-        country_code,
-        region,
-        region_name,
-        city,
-        timestamp
-    ])
-
-# 🔍 Simple root health check
+# 🧑‍💻 Root endpoint to check API health
 @app.get("/")
 def read_root():
     return {"message": "IP Checker API is working!"}
