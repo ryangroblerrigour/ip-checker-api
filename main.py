@@ -5,6 +5,7 @@ import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 from datetime import datetime
 import os
+import json
 
 app = FastAPI()
 
@@ -22,11 +23,19 @@ async def get_api_key(api_key: str = Security(api_key_header)):
 # 📝 Google Sheets logging function
 def log_to_google_sheets(project_id, respondent_id, ip_address, country, country_code, region, region_name, city):
     scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-    
+
     # Read credentials from the environment variable
     creds_json = os.getenv('GOOGLE_SHEET_CREDENTIALS')
 
-    creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_json, scope)
+    # If the creds are not found, raise an error
+    if not creds_json:
+        raise HTTPException(status_code=500, detail="Google Sheets credentials not found in environment variable")
+
+    # Convert the credentials string to a dictionary
+    creds_dict = json.loads(creds_json)
+
+    # Use the credentials to authenticate
+    creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
     client = gspread.authorize(creds)
 
     sheet = client.open("Rigour IP address checking").sheet1
