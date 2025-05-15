@@ -112,3 +112,10 @@ async def ip_check(payload: dict, api_key: str = Security(get_api_key)):
         "regionName": region_name,
         "city": city
     }
+@app.get("/env-check")
+def env_check():
+    val = os.getenv("GOOGLE_SHEET_CREDENTIALS")
+    return {
+        "found": bool(val),
+        "length": len(val) if val else 0
+    }
